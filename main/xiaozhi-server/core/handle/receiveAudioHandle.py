@@ -48,9 +48,9 @@ async def handleAudioMessage(conn, audio):
 
 
 async def startToChat(conn, text):
-    if conn.need_bind:
-        await check_bind_device(conn)
-        return
+    #if conn.need_bind:
+    #    await check_bind_device(conn)
+    #    return
     # 首先进行意图分析
     intent_handled = await handle_user_intent(conn, text)
 
