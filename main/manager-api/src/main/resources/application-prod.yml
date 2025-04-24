@@ -10,7 +10,7 @@ knife4j:
 spring:
   datasource:
       driver-class-name: com.mysql.cj.jdbc.Driver
-      url: jdbc:mysql://8.133.243.132:3306/xiaozhi_esp32_server?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&nullCatalogMeansCurrent=true
+      url: jdbc:mysql://47.117.35.158:3306/xiaozhi_esp32_server?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&nullCatalogMeansCurrent=true
       username: root
       password: zzz12345   
   druid:
@@ -38,7 +38,7 @@ spring:
             multi-statement-allow: true
   data:
     redis:
-      host: 8.133.243.132      # Redis服务器地址
+      host: 47.117.35.158      # Redis服务器地址
       port: 6379              # Redis服务器连接端口
       password: zzz12345              # Redis服务器连接密码（默认为空）
       database: 0            # Redis数据库索引（默认为0）
