@@ -42,9 +42,10 @@ class TTSException(RuntimeError):
 
 class ConnectionHandler:
     def __init__(
-        self, config: Dict[str, Any], _vad, _asr, _llm, _tts, _memory, _intent
+        self, config: Dict[str, Any], _vad, _asr, _llm, _tts, _memory, _intent, server=None
     ):
-        self.config = copy.deepcopy(config)
+        self.config = config
+        self.server = server
         self.logger = setup_logging()
         self.auth = AuthMiddleware(config)
 
@@ -202,17 +203,81 @@ class ConnectionHandler:
         finally:
             await self.close(ws)
 
+    async def reset_timeout(self):
+        """重置超时计时器"""
+        if self.timeout_task:
+            self.timeout_task.cancel()
+        self.timeout_task = asyncio.create_task(self._check_timeout())
+
     async def _route_message(self, message):
         """消息路由"""
         # 重置超时计时器
-        if self.timeout_task:
-            self.timeout_task.cancel()
-            self.timeout_task = asyncio.create_task(self._check_timeout())
+        await self.reset_timeout()
 
         if isinstance(message, str):
             await handleTextMessage(self, message)
         elif isinstance(message, bytes):
             await handleAudioMessage(self, message)
+
+    async def handle_config_update(self, message):
+        """处理配置更新请求"""
+        content = message.get("content", {})
+        new_config = content
+
+        # 遍历所有支持的配置模块
+        updated_modules = []
+        for config_model in ["tts", "llm", "vad", "asr", "memory", "intent"]:
+            if config_model not in new_config:
+                continue
+
+            new_content = new_config[config_model]
+            old_content = self.config.get(config_model, {})
+
+            # 记录配置变更
+            self.logger.bind(tag=TAG).info(
+                f"配置更新: {config_model} 旧值: {json.dumps(old_content, ensure_ascii=False)} "
+                f"新值: {json.dumps(new_content, ensure_ascii=False)}"
+            )
+
+            # 深度合并配置
+            if isinstance(old_content, dict) and isinstance(new_content, dict):
+                merged = {**old_content, **new_content}
+                self.config[config_model] = merged
+            else:
+                self.config[config_model] = new_content
+
+            # 标记需要重新初始化的模块
+            if config_model in ["llm", "tts", "asr", "vad", "intent", "memory"]:
+                updated_modules.append(config_model)
+
+        # 同步更新 WebSocketServer 的配置
+        if self.server:
+            async with self.server.config_lock:  # 使用锁确保线程安全
+                for config_model in updated_modules:
+                    self.server.config[config_model].update(new_config[config_model])
+
+        # 批量初始化模块
+        if updated_modules:
+            try:
+                self._initialize_components(self.config)
+                self.logger.bind(tag=TAG).info(
+                    f"已重新初始化模块: {', '.join(updated_modules)}"
+                )
+            except Exception as e:
+                self.logger.bind(tag=TAG).error(f"模块初始化失败: {str(e)}")
+                await self.websocket.send(json.dumps({
+                    "type": "config_update_response",
+                    "status": "error",
+                    "message": f"模块初始化失败: {str(e)}"
+                }))
+                return
+
+        # 返回成功响应
+        await self.websocket.send(json.dumps({
+            "type": "config_update_response",
+            "status": "success",
+            "message": f"已更新配置: {', '.join(updated_modules)}"
+        }))
 
     def _initialize_components(self, private_config):
         """初始化组件"""
@@ -241,7 +306,7 @@ class ConnectionHandler:
             )
             private_config["delete_audio"] = bool(self.config.get("delete_audio", True))
             self.logger.bind(tag=TAG).info(
-                f"{time.time() - begin_time} 秒，获取差异化配置成功: {private_config}"
+                f"{time.time() - begin_time} 秒，获取差异化配置成功: {json.dumps(filter_sensitive_info(private_config), ensure_ascii=False)}"
             )
         except DeviceNotFoundException as e:
             self.need_bind = True
@@ -448,7 +513,7 @@ class ConnectionHandler:
                 pos = current_text.rfind(punct)
                 prev_char = current_text[pos - 1] if pos - 1 >= 0 else ""
                 # 如果.前面是数字统一判断为小数
-                if prev_char.isdigit() and punct == '.':
+                if prev_char.isdigit() and punct == ".":
                     number_flag = False
                 if pos > last_punct_pos and number_flag:
                     last_punct_pos = pos
@@ -579,7 +644,7 @@ class ConnectionHandler:
                         pos = current_text.rfind(punct)
                         prev_char = current_text[pos - 1] if pos - 1 >= 0 else ""
                         # 如果.前面是数字统一判断为小数
-                        if prev_char.isdigit() and punct == '.':
+                        if prev_char.isdigit() and punct == ".":
                             number_flag = False
                         if pos > last_punct_pos and number_flag:
                             last_punct_pos = pos
@@ -945,3 +1010,36 @@ class ConnectionHandler:
                     break
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"超时检查任务出错: {e}")
+
+
+def filter_sensitive_info(config: dict) -> dict:
+    """
+    过滤配置中的敏感信息
+    Args:
+        config: 原始配置字典
+    Returns:
+        过滤后的配置字典
+    """
+    sensitive_keys = [
+        "api_key",
+        "personal_access_token",
+        "access_token",
+        "token",
+        "access_key_secret",
+        "secret_key",
+    ]
+
+    def _filter_dict(d: dict) -> dict:
+        filtered = {}
+        for k, v in d.items():
+            if any(sensitive in k.lower() for sensitive in sensitive_keys):
+                filtered[k] = "***"
+            elif isinstance(v, dict):
+                filtered[k] = _filter_dict(v)
+            elif isinstance(v, list):
+                filtered[k] = [_filter_dict(i) if isinstance(i, dict) else i for i in v]
+            else:
+                filtered[k] = v
+        return filtered
+
+    return _filter_dict(copy.deepcopy(config))

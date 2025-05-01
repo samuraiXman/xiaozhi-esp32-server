@@ -53,6 +53,8 @@ async def handleTextMessage(conn, message):
                         # 如果是唤醒词，且关闭了唤醒词回复，就不用回答
                         await send_stt_message(conn, text)
                         await send_tts_message(conn, "stop", None)
+                    elif is_wakeup_words:
+                        await startToChat(conn, "嘿，你好呀")
                     else:
                         # 否则需要LLM对文字内容进行答复
                         await startToChat(conn, text)
@@ -61,5 +63,24 @@ async def handleTextMessage(conn, message):
                 asyncio.create_task(handleIotDescriptors(conn, msg_json["descriptors"]))
             if "states" in msg_json:
                 asyncio.create_task(handleIotStatus(conn, msg_json["states"]))
+        elif msg_json["type"] == "server":
+            # 如果配置是从API读取的，则需要验证secret
+            read_config_from_api = conn.config.get("read_config_from_api", False)
+            if not read_config_from_api:
+                return
+            # 获取post请求的secret
+            post_secret = msg_json.get("content", {}).get("secret", "")
+            secret = conn.config["manager-api"].get("secret", "")
+            # 如果secret不匹配，则返回
+            if post_secret != secret:
+                await conn.websocket.send(json.dumps({
+                    "type": "config_update_response",
+                    "status": "error",
+                    "message": "服务器密钥验证失败"
+                }))
+                return
+            # 动态更新配置
+            if msg_json["action"] == "update_config":
+                await conn.handle_config_update(msg_json)
     except json.JSONDecodeError:
         await conn.websocket.send(message)
