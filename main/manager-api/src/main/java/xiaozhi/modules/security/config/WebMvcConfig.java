@@ -14,6 +14,7 @@ import org.springframework.http.converter.support.AllEncompassingFormHttpMessage
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -52,6 +53,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         // 忽略未知属性
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        
+        // 不转义正斜杠
+        mapper.configure(com.fasterxml.jackson.core.JsonGenerator.Feature.WRITE_ESCAPE_FORWARD_SLASHES, false);
 
         // 日期格式转换
         // mapper.setDateFormat(new SimpleDateFormat(DateUtils.DATE_TIME_PATTERN));

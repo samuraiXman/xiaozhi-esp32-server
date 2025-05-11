@@ -473,6 +473,48 @@ class ConnectionHandler:
         # 更新系统prompt至上下文
         self.dialogue.update_system_message(self.prompt)
 
+    def _process_text_segment(self, current_text, processed_chars, text_index):
+        """处理文本分段，根据标点符号或字符长度进行分段"""
+        # 查找最后一个有效标点
+        punctuations = ("。", ".", "？", "?", "！", "!", "；", ";", "：")
+        last_punct_pos = -1
+        number_flag = True
+        for punct in punctuations:
+            pos = current_text.rfind(punct)
+            prev_char = current_text[pos - 1] if pos - 1 >= 0 else ""
+            # 如果.前面是数字统一判断为小数
+            if prev_char.isdigit() and punct == ".":
+                number_flag = False
+            if pos > last_punct_pos and number_flag:
+                last_punct_pos = pos
+
+        # 如果找到标点符号，按标点符号分段
+        if last_punct_pos != -1:
+            segment_text_raw = current_text[: last_punct_pos + 1]
+            segment_text = get_string_no_punctuation_or_emoji(segment_text_raw)
+            if segment_text:
+                text_index += 1
+                self.recode_first_last_text(segment_text, text_index)
+                future = self.executor.submit(
+                    self.speak_and_play, segment_text, text_index
+                )
+                self.tts_queue.put(future)
+                return len(segment_text_raw), text_index
+        # 如果没有找到标点符号，但文本长度超过10个字符，也进行分段
+        elif len(current_text) > 10:
+            segment_text_raw = current_text[:10]
+            segment_text = get_string_no_punctuation_or_emoji(segment_text_raw)
+            if segment_text:
+                text_index += 1
+                self.recode_first_last_text(segment_text, text_index)
+                future = self.executor.submit(
+                    self.speak_and_play, segment_text, text_index
+                )
+                self.tts_queue.put(future)
+                return len(segment_text_raw), text_index
+        
+        return 0, text_index
+
     def chat(self, query):
 
         self.dialogue.put(Message(role="user", content=query))
@@ -505,34 +547,10 @@ class ConnectionHandler:
             full_text = "".join(response_message)
             current_text = full_text[processed_chars:]  # 从未处理的位置开始
 
-            # 查找最后一个有效标点
-            punctuations = ("。", ".", "？", "?", "！", "!", "；", ";", "：")
-            last_punct_pos = -1
-            number_flag = True
-            for punct in punctuations:
-                pos = current_text.rfind(punct)
-                prev_char = current_text[pos - 1] if pos - 1 >= 0 else ""
-                # 如果.前面是数字统一判断为小数
-                if prev_char.isdigit() and punct == ".":
-                    number_flag = False
-                if pos > last_punct_pos and number_flag:
-                    last_punct_pos = pos
-
-            # 找到分割点则处理
-            if last_punct_pos != -1:
-                segment_text_raw = current_text[: last_punct_pos + 1]
-                segment_text = get_string_no_punctuation_or_emoji(segment_text_raw)
-                if segment_text:
-                    # 强制设置空字符，测试TTS出错返回语音的健壮性
-                    # if text_index % 2 == 0:
-                    #     segment_text = " "
-                    text_index += 1
-                    self.recode_first_last_text(segment_text, text_index)
-                    future = self.executor.submit(
-                        self.speak_and_play, segment_text, text_index
-                    )
-                    self.tts_queue.put(future)
-                    processed_chars += len(segment_text_raw)  # 更新已处理字符位置
+            # 使用辅助函数处理文本分段
+            segment_length, text_index = self._process_text_segment(current_text, processed_chars, text_index)
+            if segment_length > 0:
+                processed_chars += segment_length  # 更新已处理字符位置
 
         # 处理最后剩余的文本
         full_text = "".join(response_message)
@@ -636,34 +654,10 @@ class ConnectionHandler:
                     full_text = "".join(response_message)
                     current_text = full_text[processed_chars:]  # 从未处理的位置开始
 
-                    # 查找最后一个有效标点
-                    punctuations = ("。", ".", "？", "?", "！", "!", "；", ";", "：")
-                    last_punct_pos = -1
-                    number_flag = True
-                    for punct in punctuations:
-                        pos = current_text.rfind(punct)
-                        prev_char = current_text[pos - 1] if pos - 1 >= 0 else ""
-                        # 如果.前面是数字统一判断为小数
-                        if prev_char.isdigit() and punct == ".":
-                            number_flag = False
-                        if pos > last_punct_pos and number_flag:
-                            last_punct_pos = pos
-
-                    # 找到分割点则处理
-                    if last_punct_pos != -1:
-                        segment_text_raw = current_text[: last_punct_pos + 1]
-                        segment_text = get_string_no_punctuation_or_emoji(
-                            segment_text_raw
-                        )
-                        if segment_text:
-                            text_index += 1
-                            self.recode_first_last_text(segment_text, text_index)
-                            future = self.executor.submit(
-                                self.speak_and_play, segment_text, text_index
-                            )
-                            self.tts_queue.put(future)
-                            # 更新已处理字符位置
-                            processed_chars += len(segment_text_raw)
+                    # 使用辅助函数处理文本分段
+                    segment_length, text_index = self._process_text_segment(current_text, processed_chars, text_index)
+                    if segment_length > 0:
+                        processed_chars += segment_length  # 更新已处理字符位置
 
         # 处理function call
         if tool_call_flag:
