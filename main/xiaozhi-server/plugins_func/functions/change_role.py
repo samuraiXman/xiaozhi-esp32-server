@@ -4,6 +4,7 @@ from config.logger import setup_logging
 TAG = __name__
 logger = setup_logging()
 
+# 预定义的角色模板
 prompts = {
     "英语老师":"""我是一个叫{{assistant_name}}(Lily)的英语老师，我会讲中文和英文，发音标准。
 如果你没有英文名，我会给你起一个英文名。
@@ -23,34 +24,49 @@ prompts = {
 我希望能与你一同踏上探索这个神奇世界的旅程，分享发现的乐趣，解决遇到的难题，一起用好奇心和智慧去揭开那些未知的面纱。
 无论是去了解远古的文明，还是去探讨未来的科技，我相信我们能一起找到答案，甚至提出更多有趣的问题。"""
 }
+
 change_role_function_desc = {
-                "type": "function",
-                "function": {
-                    "name": "change_role",
-                    "description": "当用户想切换角色/模型性格/助手名字时调用,可选的角色有：[机车女友,英语老师,好奇小男孩]",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "role_name": {
-                                "type": "string",
-                                "description": "要切换的角色名字"
-                            },
-                            "role":{
-                                "type": "string",
-                                "description": "要切换的角色的职业"
-                            }
-                        },
-                        "required": ["role","role_name"]
-                    }
+    "type": "function",
+    "function": {
+        "name": "change_role",
+        "description": "当用户想切换角色/模型性格/助手名字时调用。可以使用预定义角色：英语老师、机车女友、好奇小男孩，或者自定义新角色。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "role_name": {
+                    "type": "string",
+                    "description": "要切换的角色名字"
+                },
+                "role": {
+                    "type": "string",
+                    "description": "要切换的角色的职业或类型。如果是预定义角色，直接使用角色名；如果是自定义角色，需要提供角色描述。"
+                },
+                "role_description": {
+                    "type": "string",
+                    "description": "自定义角色的详细描述，仅在role不是预定义角色时需要提供。"
                 }
-            }
+            },
+            "required": ["role", "role_name"]
+        }
+    }
+}
 
 @register_function('change_role', change_role_function_desc, ToolType.CHANGE_SYS_PROMPT)
-def change_role(conn, role: str, role_name: str):
+def change_role(conn, role: str, role_name: str, role_description: str = None):
     """切换角色"""
-    if role not in prompts:
-        return ActionResponse(action=Action.RESPONSE, result="切换角色失败", response="不支持的角色")
-    new_prompt = prompts[role].replace("{{assistant_name}}", role_name)
+    # 检查是否是预定义角色
+    if role in prompts:
+        new_prompt = prompts[role].replace("{{assistant_name}}", role_name)
+    else:
+        # 如果是自定义角色，使用提供的描述
+        if not role_description:
+            return ActionResponse(action=Action.RESPONSE, result="切换角色失败", response="自定义角色需要提供角色描述")
+        
+        # 构建自定义角色的提示词
+        new_prompt = f"""我是一个叫{{assistant_name}}的{role}，{role_description}
+我会始终保持这个角色设定，用符合这个角色的语气和方式与用户交流。"""
+        new_prompt = new_prompt.replace("{{assistant_name}}", role_name)
+    
     conn.change_system_prompt(new_prompt)
     logger.bind(tag=TAG).info(f"准备切换角色:{role},角色名字:{role_name}")
     res = f"切换角色成功,我是{role}{role_name}"
