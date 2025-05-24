@@ -531,7 +531,7 @@ class ConnectionHandler:
                 future = self.executor.submit(
                     self.speak_and_play, segment_text, text_index
                 )
-                self.tts_queue.put(future)
+                self.tts_queue.put((future, text_index))
                 return len(segment_text_raw), text_index
         # 如果没有找到标点符号，但文本长度超过10个字符，也进行分段
         elif len(current_text) > 10:
@@ -543,7 +543,7 @@ class ConnectionHandler:
                 future = self.executor.submit(
                     self.speak_and_play, segment_text, text_index
                 )
-                self.tts_queue.put(future)
+                self.tts_queue.put((future, text_index))
                 return len(segment_text_raw), text_index
         
         return 0, text_index
@@ -608,7 +608,7 @@ class ConnectionHandler:
                     future = self.executor.submit(
                         self.speak_and_play, segment_text, text_index
                     )
-                    self.tts_queue.put(future)
+                    self.tts_queue.put((future, text_index))
                     processed_chars += len(segment_text_raw)  # 更新已处理字符位置
 
         # 处理最后剩余的文本
@@ -740,7 +740,7 @@ class ConnectionHandler:
                             future = self.executor.submit(
                                 self.speak_and_play, segment_text, text_index
                             )
-                            self.tts_queue.put(future)
+                            self.tts_queue.put((future, text_index))
                             # 更新已处理字符位置
                             processed_chars += len(segment_text_raw)
 

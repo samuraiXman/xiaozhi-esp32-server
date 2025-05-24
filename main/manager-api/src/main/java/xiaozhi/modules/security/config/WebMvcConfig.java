@@ -65,7 +65,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         
         // 不转义正斜杠
-        mapper.configure(com.fasterxml.jackson.core.JsonGenerator.Feature.WRITE_ESCAPE_FORWARD_SLASHES, false);
+        mapper.configure(com.fasterxml.jackson.core.JsonGenerator.Feature.ESCAPE_FORWARD_SLASHES, false);
 
         // 设置时区
         mapper.setTimeZone(TimeZone.getTimeZone("GMT+8"));
