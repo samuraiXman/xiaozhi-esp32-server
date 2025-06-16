@@ -1,19 +1,16 @@
 package xiaozhi.modules.sys.enums;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
-import lombok.Getter;
-import org.apache.commons.lang3.StringUtils;
 
 /**
  * 服务端调用响应枚举
- *
- * @Author CAIXYPROMISE
- * @since 2025/5/15 5:50
  */
-public enum ServerActionResponseEnum
-{
+public enum ServerActionResponseEnum {
     SUCCESS("success"), FAIL("fail");
+
     private final String value;
 
     ServerActionResponseEnum(String value) {
@@ -21,8 +18,7 @@ public enum ServerActionResponseEnum
     }
 
     @JsonValue
-    public String getValue()
-    {
+    public String getValue() {
         return value;
     }
 
