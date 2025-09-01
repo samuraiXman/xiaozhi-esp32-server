@@ -1,44 +1,28 @@
-import asyncio
-import logging
 import os
-import statistics
-import time
-from typing import Dict
+import importlib.util
+import asyncio
 
-import aiohttp
-from tabulate import tabulate
-
-from config.settings import load_config
-from core.utils.asr import create_instance as create_stt_instance
-from core.utils.llm import create_instance as create_llm_instance
-from core.utils.tts import create_instance as create_tts_instance
-
-# 设置全局日志级别为WARNING，抑制INFO级别日志
-logging.basicConfig(level=logging.WARNING)
+print("使用前请根据doc/performance_testerer.md的说明准备配置。")
 
 
-class AsyncPerformanceTester:
-    def __init__(self):
-        self.config = load_config()
-        self.test_sentences = self.config.get("module_test", {}).get(
-            "test_sentences",
-            [
-                "你好，请介绍一下你自己",
-                "What's the weather like today?",
-                "请用100字概括量子计算的基本原理和应用前景",
-            ],
-        )
+def list_performance_tester_modules():
+    performance_tester_dir = os.path.join(
+        os.path.dirname(__file__), "performance_tester"
+    )
+    modules = []
+    for file in os.listdir(performance_tester_dir):
+        if file.endswith(".py"):
+            modules.append(file[:-3])
+    return modules
 
-        self.test_wav_list = []
-        self.wav_root = r"config/assets"
-        for file_name in os.listdir(self.wav_root):
-            file_path = os.path.join(self.wav_root, file_name)
-            # 检查文件大小是否大于300KB
-            if os.path.getsize(file_path) > 300 * 1024:  # 300KB = 300 * 1024 bytes
-                with open(file_path, "rb") as f:
-                    self.test_wav_list.append(f.read())
 
-        self.results = {"llm": {}, "tts": {}, "stt": {}, "combinations": []}
+async def load_and_execute_module(module_name):
+    module_path = os.path.join(
+        os.path.dirname(__file__), "performance_tester", f"{module_name}.py"
+    )
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
     async def _check_ollama_service(self, base_url: str, model_name: str) -> bool:
         """异步检查Ollama服务状态"""
@@ -387,256 +371,47 @@ class AsyncPerformanceTester:
                     disable_numparse=True,
                 )
             )
+
+    if hasattr(module, "main"):
+        main_func = module.main
+        if asyncio.iscoroutinefunction(main_func):
+            await main_func()
         else:
-            print("\n⚠️ 没有可用的LLM模块进行测试。")
+            main_func()
+    else:
+        print(f"模块 {module_name} 中没有找到 main 函数。")
 
-        tts_table = []
-        for name, data in self.results["tts"].items():
-            if data["errors"] == 0:
-                tts_table.append([name, f"{data['avg_time']:.3f}秒"])  # 不需要固定宽度
 
-        if tts_table:
-            print("\nTTS 性能排行:\n")
-            print(
-                tabulate(
-                    tts_table,
-                    headers=["模型名称", "合成耗时"],
-                    tablefmt="github",
-                    colalign=("left", "right"),
-                    disable_numparse=True,
-                )
-            )
+def get_module_description(module_name):
+    module_path = os.path.join(
+        os.path.dirname(__file__), "performance_tester", f"{module_name}.py"
+    )
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return getattr(module, "description", "暂无描述")
+
+
+def main():
+    modules = list_performance_tester_modules()
+    if not modules:
+        print("performance_tester 目录中没有可用的性能测试工具。")
+        return
+
+    print("可用的性能测试工具：")
+    for idx, module in enumerate(modules, 1):
+        description = get_module_description(module)
+        print(f"{idx}. {module} - {description}")
+
+    try:
+        choice = int(input("请选择要调用的性能测试工具编号：")) - 1
+        if 0 <= choice < len(modules):
+            asyncio.run(load_and_execute_module(modules[choice]))
         else:
-            print("\n⚠️ 没有可用的TTS模块进行测试。")
-
-        stt_table = []
-        for name, data in self.results["stt"].items():
-            if data["errors"] == 0:
-                stt_table.append([name, f"{data['avg_time']:.3f}秒"])  # 不需要固定宽度
-
-        if stt_table:
-            print("\nSTT 性能排行:\n")
-            print(
-                tabulate(
-                    stt_table,
-                    headers=["模型名称", "合成耗时"],
-                    tablefmt="github",
-                    colalign=("left", "right"),
-                    disable_numparse=True,
-                )
-            )
-        else:
-            print("\n⚠️ 没有可用的STT模块进行测试。")
-
-        if self.results["combinations"]:
-            print("\n推荐配置组合 (得分越小越好):\n")
-            combo_table = []
-            for combo in self.results["combinations"][:]:
-                combo_table.append(
-                    [
-                        f"{combo['llm']} + {combo['tts']} + {combo['stt']}",  # 不需要固定宽度
-                        f"{combo['score']:.3f}",
-                        f"{combo['details']['llm_first_token']:.3f}秒",
-                        f"{combo['details']['llm_stability']:.3f}",
-                        f"{combo['details']['tts_time']:.3f}秒",
-                        f"{combo['details']['stt_time']:.3f}秒",
-                    ]
-                )
-
-            print(
-                tabulate(
-                    combo_table,
-                    headers=[
-                        "组合方案",
-                        "综合得分",
-                        "LLM首字耗时",
-                        "稳定性",
-                        "TTS合成耗时",
-                        "STT合成耗时",
-                    ],
-                    tablefmt="github",
-                    colalign=("left", "right", "right", "right", "right", "right"),
-                    disable_numparse=True,
-                )
-            )
-        else:
-            print("\n⚠️ 没有可用的模块组合建议。")
-
-    def _process_results(self, all_results):
-        """处理测试结果"""
-        for result in all_results:
-            if result["errors"] == 0:
-                if result["type"] == "llm":
-                    self.results["llm"][result["name"]] = result
-                elif result["type"] == "tts":
-                    self.results["tts"][result["name"]] = result
-                elif result["type"] == "stt":
-                    self.results["stt"][result["name"]] = result
-                else:
-                    pass
-
-    async def run(self):
-        """执行全量异步测试"""
-        print("🔍 开始筛选可用模块...")
-
-        # 创建所有测试任务
-        all_tasks = []
-
-        # LLM测试任务
-        if self.config.get("LLM") is not None:
-            for llm_name, config in self.config.get("LLM", {}).items():
-                # 检查配置有效性
-                if llm_name == "CozeLLM":
-                    if any(x in config.get("bot_id", "") for x in ["你的"]) or any(
-                        x in config.get("user_id", "") for x in ["你的"]
-                    ):
-                        print(f"⏭️  LLM {llm_name} 未配置bot_id/user_id，已跳过")
-                        continue
-                elif "api_key" in config and any(
-                    x in config["api_key"] for x in ["你的", "placeholder", "sk-xxx"]
-                ):
-                    print(f"⏭️  LLM {llm_name} 未配置api_key，已跳过")
-                    continue
-
-                # 对于Ollama，先检查服务状态
-                if llm_name == "Ollama":
-                    base_url = config.get("base_url", "http://localhost:11434")
-                    model_name = config.get("model_name")
-                    if not model_name:
-                        print(f"🚫 Ollama未配置model_name")
-                        continue
-
-                    if not await self._check_ollama_service(base_url, model_name):
-                        continue
-
-                print(f"📋 添加LLM测试任务: {llm_name}")
-                module_type = config.get("type", llm_name)
-                llm = create_llm_instance(module_type, config)
-
-                # 为每个句子创建独立任务
-                for sentence in self.test_sentences:
-                    sentence = sentence.encode("utf-8").decode("utf-8")
-                    all_tasks.append(
-                        self._test_single_sentence(llm_name, llm, sentence)
-                    )
-
-        # TTS测试任务
-        if self.config.get("TTS") is not None:
-            for tts_name, config in self.config.get("TTS", {}).items():
-                token_fields = ["access_token", "api_key", "token"]
-                if any(
-                    field in config
-                    and any(x in config[field] for x in ["你的", "placeholder"])
-                    for field in token_fields
-                ):
-                    print(f"⏭️  TTS {tts_name} 未配置access_token/api_key，已跳过")
-                    continue
-                print(f"🎵 添加TTS测试任务: {tts_name}")
-                all_tasks.append(self._test_tts(tts_name, config))
-
-        # STT测试任务
-        if len(self.test_wav_list) >= 1:
-            if self.config.get("ASR") is not None:
-                for stt_name, config in self.config.get("ASR", {}).items():
-                    token_fields = ["access_token", "api_key", "token"]
-                    if any(
-                        field in config
-                        and any(x in config[field] for x in ["你的", "placeholder"])
-                        for field in token_fields
-                    ):
-                        print(f"⏭️  ASR {stt_name} 未配置access_token/api_key，已跳过")
-                        continue
-                    print(f"🎵 添加ASR测试任务: {stt_name}")
-                    all_tasks.append(self._test_stt(stt_name, config))
-        else:
-            print(f"\n⚠️  {self.wav_root} 路径下没有音频文件，已跳过STT测试任务")
-
-        print(
-            f"\n✅ 找到 {len([t for t in all_tasks if 'test_single_sentence' in str(t)]) / len(self.test_sentences):.0f} 个可用LLM模块"
-        )
-        print(
-            f"✅ 找到 {len([t for t in all_tasks if '_test_tts' in str(t)])} 个可用TTS模块"
-        )
-        print(
-            f"✅ 找到 {len([t for t in all_tasks if '_test_stt' in str(t)])} 个可用STT模块"
-        )
-        print("\n⏳ 开始并发测试所有模块...\n")
-
-        # 并发执行所有测试任务
-        all_results = await asyncio.gather(*all_tasks, return_exceptions=True)
-
-        # 处理LLM结果
-        llm_results = {}
-        for result in [
-            r
-            for r in all_results
-            if r and isinstance(r, dict) and r.get("type") == "llm"
-        ]:
-            llm_name = result["name"]
-            if llm_name not in llm_results:
-                llm_results[llm_name] = {
-                    "name": llm_name,
-                    "type": "llm",
-                    "first_token_times": [],
-                    "response_times": [],
-                    "errors": 0,
-                }
-            llm_results[llm_name]["first_token_times"].append(
-                result["first_token_time"]
-            )
-            llm_results[llm_name]["response_times"].append(result["response_time"])
-
-        # 计算LLM平均值和标准差
-        for llm_name, data in llm_results.items():
-            if len(data["first_token_times"]) >= len(self.test_sentences) * 0.5:
-                self.results["llm"][llm_name] = {
-                    "name": llm_name,
-                    "type": "llm",
-                    "avg_response": sum(data["response_times"])
-                    / len(data["response_times"]),
-                    "avg_first_token": sum(data["first_token_times"])
-                    / len(data["first_token_times"]),
-                    "std_first_token": (
-                        statistics.stdev(data["first_token_times"])
-                        if len(data["first_token_times"]) > 1
-                        else 0
-                    ),
-                    "std_response": (
-                        statistics.stdev(data["response_times"])
-                        if len(data["response_times"]) > 1
-                        else 0
-                    ),
-                    "errors": 0,
-                }
-
-        # 处理TTS结果
-        for result in [
-            r
-            for r in all_results
-            if r and isinstance(r, dict) and r.get("type") == "tts"
-        ]:
-            if result["errors"] == 0:
-                self.results["tts"][result["name"]] = result
-
-        # 处理STT结果
-        for result in [
-            r
-            for r in all_results
-            if r and isinstance(r, dict) and r.get("type") == "stt"
-        ]:
-            if result["errors"] == 0:
-                self.results["stt"][result["name"]] = result
-
-        # 生成组合建议并打印结果
-        print("\n📊 生成测试报告...")
-        self._generate_combinations()
-        self._print_results()
-
-
-async def main():
-    tester = AsyncPerformanceTester()
-    await tester.run()
+            print("无效的选择。")
+    except ValueError:
+        print("请输入有效的数字。")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

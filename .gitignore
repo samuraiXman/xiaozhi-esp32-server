@@ -167,3 +167,12 @@ main/manager-web/.webpack_cache/
 main/xiaozhi-server/mysql
 uploadfile
 .vscode
+.cursor
+ 
+!package.json
+!**/package.json
+
+# Do not ignore env and json files inside manager-mobile
+!main/manager-mobile/**/env/
+!main/manager-mobile/**/.env*
+!main/manager-mobile/**/*.json

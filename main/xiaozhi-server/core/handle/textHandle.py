@@ -1,4 +1,5 @@
 import json
+import time
 from core.handle.abortHandle import handleAbortMessage
 from core.handle.helloHandle import handleHelloMessage
 from core.utils.util import remove_punctuation_and_length, filter_sensitive_info
@@ -45,8 +46,12 @@ async def handleTextMessage(conn, message):
                 conn.client_have_voice = False
                 conn.asr_audio.clear()
                 if "text" in msg_json:
-                    text = msg_json["text"]
-                    _, text = remove_punctuation_and_length(text)
+                    conn.last_activity_time = time.time() * 1000
+                    original_text = msg_json["text"]  # 保留原始文本
+                    filtered_len, filtered_text = remove_punctuation_and_length(
+                        original_text
+                    )
+                    text = filtered_text
 
                     # 识别是否是唤醒词
                     is_wakeup_words = text in conn.config.get("wakeup_words")

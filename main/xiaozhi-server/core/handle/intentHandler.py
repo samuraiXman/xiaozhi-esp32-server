@@ -5,13 +5,24 @@ from core.handle.sendAudioHandle import send_stt_message
 from core.handle.helloHandle import checkWakeupWords
 from core.utils.util import remove_punctuation_and_length
 from core.utils.dialogue import Message
-from plugins_func.register import Action
+from plugins_func.register import Action, ActionResponse
+from core.providers.tts.dto.dto import TTSMessageDTO, SentenceType
 from loguru import logger
 
 TAG = __name__
 
 
 async def handle_user_intent(conn, text):
+    # 预处理输入文本，处理可能的JSON格式
+    try:
+        if text.strip().startswith('{') and text.strip().endswith('}'):
+            parsed_data = json.loads(text)
+            if isinstance(parsed_data, dict) and "content" in parsed_data:
+                text = parsed_data["content"]  # 提取content用于意图分析
+                conn.current_speaker = parsed_data.get("speaker")  # 保留说话人信息
+    except (json.JSONDecodeError, TypeError):
+        pass
+
     # 检查是否有明确的退出命令
     if await check_direct_exit(conn, text):
         return True
@@ -26,6 +37,8 @@ async def handle_user_intent(conn, text):
     intent_result = await analyze_intent_with_llm(conn, text)
     if not intent_result:
         return False
+    # 会话开始时生成sentence_id
+    conn.sentence_id = str(uuid.uuid4().hex)
     # 处理各种意图
     return await process_intent_result(conn, intent_result, text)
 
@@ -81,7 +94,7 @@ async def process_intent_result(conn, intent_result, original_text):
                 if not funcItem:
                     conn.func_handler.function_registry.register_function("play_music")
 
-            function_args = None
+            function_args = {}
             if "arguments" in intent_data["function_call"]:
                 function_args = intent_data["function_call"]["arguments"]
             # 确保参数是字符串格式的JSON

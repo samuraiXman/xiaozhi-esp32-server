@@ -95,11 +95,23 @@ def is_private_ip(ip_addr):
 
 def get_ip_info(ip_addr, logger):
     try:
+        # 导入全局缓存管理器
+        from core.utils.cache.manager import cache_manager, CacheType
+
+        # 先从缓存获取
+        cached_ip_info = cache_manager.get(CacheType.IP_INFO, ip_addr)
+        if cached_ip_info is not None:
+            return cached_ip_info
+
+        # 缓存未命中，调用API
         if is_private_ip(ip_addr):
             ip_addr = ""
         url = f"https://whois.pconline.com.cn/ipJson.jsp?json=true&ip={ip_addr}"
         resp = requests.get(url).json()
         ip_info = {"city": resp.get("city")}
+
+        # 存入缓存
+        cache_manager.set(CacheType.IP_INFO, ip_addr, ip_info)
         return ip_info
     except Exception as e:
         logger.bind(tag=TAG).error(f"Error getting client ip info: {e}")
@@ -110,51 +122,6 @@ def write_json_file(file_path, data):
     """将数据写入 JSON 文件"""
     with open(file_path, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=4)
-
-
-def is_punctuation_or_emoji(char):
-    """检查字符是否为空格、指定标点或表情符号"""
-    # 定义需要去除的中英文标点（包括全角/半角）
-    punctuation_set = {
-        "，",
-        ",",  # 中文逗号 + 英文逗号
-        "-",
-        "－",  # 英文连字符 + 中文全角横线
-        "、",  # 中文顿号
-        "“",
-        "”",
-        '"',  # 中文双引号 + 英文引号
-        "：",
-        ":",  # 中文冒号 + 英文冒号
-    }
-    if char.isspace() or char in punctuation_set:
-        return True
-    # 检查表情符号（保留原有逻辑）
-    code_point = ord(char)
-    emoji_ranges = [
-        (0x1F600, 0x1F64F),
-        (0x1F300, 0x1F5FF),
-        (0x1F680, 0x1F6FF),
-        (0x1F900, 0x1F9FF),
-        (0x1FA70, 0x1FAFF),
-        (0x2600, 0x26FF),
-        (0x2700, 0x27BF),
-    ]
-    return any(start <= code_point <= end for start, end in emoji_ranges)
-
-
-def get_string_no_punctuation_or_emoji(s):
-    """去除字符串首尾的空格、标点符号和表情符号"""
-    chars = list(s)
-    # 处理开头的字符
-    start = 0
-    while start < len(chars) and is_punctuation_or_emoji(chars[start]):
-        start += 1
-    # 处理结尾的字符
-    end = len(chars) - 1
-    while end >= start and is_punctuation_or_emoji(chars[end]):
-        end -= 1
-    return "".join(chars[start : end + 1])
 
 
 def remove_punctuation_and_length(text):
@@ -991,3 +958,82 @@ def filter_sensitive_info(config: dict) -> dict:
         return filtered
 
     return _filter_dict(copy.deepcopy(config))
+
+
+def get_vision_url(config: dict) -> str:
+    """获取 vision URL
+
+    Args:
+        config: 配置字典
+
+    Returns:
+        str: vision URL
+    """
+    server_config = config["server"]
+    vision_explain = server_config.get("vision_explain", "")
+    if "你的" in vision_explain:
+        local_ip = get_local_ip()
+        port = int(server_config.get("http_port", 8003))
+        vision_explain = f"http://{local_ip}:{port}/mcp/vision/explain"
+    return vision_explain
+
+
+def is_valid_image_file(file_data: bytes) -> bool:
+    """
+    检查文件数据是否为有效的图片格式
+
+    Args:
+        file_data: 文件的二进制数据
+
+    Returns:
+        bool: 如果是有效的图片格式返回True，否则返回False
+    """
+    # 常见图片格式的魔数（文件头）
+    image_signatures = {
+        b"\xff\xd8\xff": "JPEG",
+        b"\x89PNG\r\n\x1a\n": "PNG",
+        b"GIF87a": "GIF",
+        b"GIF89a": "GIF",
+        b"BM": "BMP",
+        b"II*\x00": "TIFF",
+        b"MM\x00*": "TIFF",
+        b"RIFF": "WEBP",
+    }
+
+    # 检查文件头是否匹配任何已知的图片格式
+    for signature in image_signatures:
+        if file_data.startswith(signature):
+            return True
+
+    return False
+
+
+def sanitize_tool_name(name: str) -> str:
+    """Sanitize tool names for OpenAI compatibility."""
+    # 支持中文、英文字母、数字、下划线和连字符
+    return re.sub(r"[^a-zA-Z0-9_\-\u4e00-\u9fff]", "_", name)
+
+
+def validate_mcp_endpoint(mcp_endpoint: str) -> bool:
+    """
+    校验MCP接入点格式
+
+    Args:
+        mcp_endpoint: MCP接入点字符串
+
+    Returns:
+        bool: 是否有效
+    """
+    # 1. 检查是否以ws开头
+    if not mcp_endpoint.startswith("ws"):
+        return False
+
+    # 2. 检查是否包含key、call字样
+    if "key" in mcp_endpoint.lower() or "call" in mcp_endpoint.lower():
+        return False
+
+    # 3. 检查是否包含/mcp/字样
+    if "/mcp/" not in mcp_endpoint:
+        return False
+
+    return True

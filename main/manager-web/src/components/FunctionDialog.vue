@@ -60,6 +60,65 @@
       </div>
     </div>
 
+<<<<<<< HEAD
+=======
+    <!-- MCP区域 -->
+    <div class="mcp-access-point">
+      <div class="mcp-container">
+        <!-- 左侧区域 -->
+        <div class="mcp-left">
+          <div class="mcp-header">
+            <h3 class="bold-title">MCP接入点</h3>
+          </div>
+          <div class="url-header">
+            <div class="address-desc">
+              <span>以下是智能体的MCP接入点地址。</span>
+              <a href="https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/main/docs/mcp-endpoint-enable.md"
+                target="_blank" class="doc-link">如何部署MCP接入点</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+              <a href="https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/main/docs/mcp-endpoint-integration.md"
+                target="_blank" class="doc-link">如何接入MCP功能</a> &nbsp;
+            </div>
+          </div>
+          <el-input v-model="mcpUrl" readonly class="url-input">
+            <template #suffix>
+              <el-button @click="copyUrl" class="inner-copy-btn" icon="el-icon-document-copy">
+                复制
+              </el-button>
+            </template>
+          </el-input>
+        </div>
+
+        <!-- 右侧区域 -->
+        <div class="mcp-right">
+          <div class="mcp-header">
+            <h3 class="bold-title">接入点状态</h3>
+          </div>
+          <div class="status-container">
+            <span class="status-indicator" :class="mcpStatus"></span>
+            <span class="status-text">{{
+              mcpStatus === 'connected' ? '已连接' :
+                mcpStatus === 'loading' ? '加载中...' : '未连接'
+            }}</span>
+            <button class="refresh-btn" @click="refreshStatus">
+              <span class="refresh-icon">↻</span>
+              <span>刷新</span>
+            </button>
+          </div>
+          <div class="mcp-tools-list">
+            <div v-if="mcpTools.length > 0" class="tools-grid">
+              <el-button v-for="tool in mcpTools" :key="tool" size="small" class="tool-btn" plain>
+                {{ tool }}
+              </el-button>
+            </div>
+            <div v-else class="no-tools">
+              <span>暂无可用工具</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+>>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
     <div class="drawer-footer">
       <el-button @click="closeDialog">取消</el-button>
       <el-button type="primary" @click="saveSelection">保存配置</el-button>
@@ -407,4 +466,201 @@ export default {
 ::v-deep .el-checkbox__label {
   display: none;
 }
+<<<<<<< HEAD
+=======
+
+.mcp-access-point {
+  border-top: 1px solid #EBEEF5;
+  padding: 20px 24px;
+  text-align: left;
+}
+
+.mcp-header {
+  .bold-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 5px 0 30px 0;
+  }
+}
+
+.mcp-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.mcp-left,
+.mcp-right {
+  flex: 1;
+  padding-bottom: 50px;
+}
+
+.url-header {
+  margin-bottom: 8px;
+  color: black;
+
+  h4 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: normal;
+  }
+
+  .address-desc {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    margin-bottom: 12px;
+
+    .doc-link {
+      color: #1677ff;
+      text-decoration: none;
+      margin-left: 4px;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+.url-input {
+  border-radius: 4px 0 0 4px;
+  font-size: 14px;
+  height: 36px;
+  box-sizing: border-box;
+
+  ::v-deep .el-input__inner {
+    background-color: #f5f5f5 !important;
+  }
+
+  ::v-deep .el-input__suffix {
+    right: 0;
+    display: flex;
+    align-items: center;
+    padding-right: 10px;
+
+    .inner-copy-btn {
+      pointer-events: auto;
+      border: none;
+      background: #1677ff;
+      color: white;
+      padding: 6px;
+      margin-top: 4px;
+      margin-left: 4px;
+    }
+  }
+}
+
+.mcp-right {
+  h4 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    font-weight: normal;
+    color: black;
+  }
+}
+
+.status-container {
+  display: flex;
+  align-items: center;
+
+  .status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+
+    &.disconnected {
+      background-color: #909399;
+      /* 灰色 - 未连接 */
+    }
+
+    &.connected {
+      background-color: #67C23A;
+      /* 绿色 - 已连接 */
+    }
+
+    &.loading {
+      background-color: #E6A23C;
+      /* 橙色 - 加载中 */
+      animation: pulse 1.5s infinite;
+    }
+  }
+
+  .status-text {
+    font-size: 14px;
+    margin-right: 10px;
+  }
+
+  .refresh-btn {
+    display: flex;
+    align-items: center;
+    padding: 2px 10px;
+    background: white;
+    color: black;
+    border: 1px solid #DCDFE6;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+
+    &:hover {
+      background: #1677ff;
+      color: white;
+      border-color: #1677ff;
+    }
+
+    .refresh-icon {
+      margin-right: 6px;
+      font-size: 14px;
+    }
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.mcp-tools-list {
+  margin-top: 10px;
+
+  .tools-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tool-btn {
+    padding: 6px 12px;
+    border-color: #1677ff;
+    color: #1677ff;
+    background-color: white;
+    font-size: 12px;
+
+    &:hover {
+      background-color: #1677ff;
+      color: white;
+      border-color: #1677ff;
+    }
+  }
+
+  .no-tools {
+    text-align: center;
+    color: #909399;
+    font-size: 14px;
+    padding: 10px 0;
+  }
+}
+>>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
 </style>

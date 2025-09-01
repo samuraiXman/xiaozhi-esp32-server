@@ -4,7 +4,8 @@ from loguru import logger
 from config.config_loader import load_config
 from config.settings import check_config_file
 
-SERVER_VERSION = "0.4.4"
+SERVER_VERSION = "0.7.6"
+_logger_initialized = False
 
 
 def get_module_abbreviation(module_name, module_dict):
@@ -29,12 +30,17 @@ def build_module_string(selected_module):
         + get_module_abbreviation("TTS", selected_module)
         + get_module_abbreviation("Memory", selected_module)
         + get_module_abbreviation("Intent", selected_module)
+        + get_module_abbreviation("VLLM", selected_module)
     )
 
 
 def formatter(record):
-    """为没有 tag 的日志添加默认值"""
+    """为没有 tag 的日志添加默认值，并处理动态模块字符串"""
     record["extra"].setdefault("tag", record["name"])
+    # 如果没有设置 selected_module，使用默认值
+    record["extra"].setdefault("selected_module", "00000000000000")
+    # 将 selected_module 从 extra 提取到顶级，以支持 {selected_module} 格式
+    record["selected_module"] = record["extra"]["selected_module"]
     return record["message"]
 
 
@@ -43,20 +49,29 @@ def setup_logging():
     """从配置文件中读取日志配置，并设置日志输出格式和级别"""
     config = load_config()
     log_config = config["log"]
+    selected_module_str = build_module_string(config.get("selected_module", {}))
+    
+    # 第一次初始化时配置日志
+    if not _logger_initialized:
+        # 使用默认的模块字符串进行初始化
+        logger.configure(
+            extra={
+                "selected_module": selected_module_str,
+            }
+        )
+        _logger_initialized = True
+
     log_format = log_config.get(
         "log_format",
-        "<green>{time:YYMMDD HH:mm:ss}</green>[{version}_{selected_module}][<light-blue>{extra[tag]}</light-blue>]-<level>{level}</level>-<light-green>{message}</light-green>",
+        "<green>{time:YYMMDD HH:mm:ss}</green>[{version}_{extra[selected_module]}][<light-blue>{extra[tag]}</light-blue>]-<level>{level}</level>-<light-green>{message}</light-green>",
     )
     log_format_file = log_config.get(
         "log_format_file",
-        "{time:YYYY-MM-DD HH:mm:ss} - {version_{selected_module}} - {name} - {level} - {extra[tag]} - {message}",
+        "{time:YYYY-MM-DD HH:mm:ss} - {version}_{extra[selected_module]} - {name} - {level} - {extra[tag]} - {message}",
     )
-    selected_module_str = build_module_string(config.get("selected_module", {}))
-
+    
     log_format = log_format.replace("{version}", SERVER_VERSION)
-    log_format = log_format.replace("{selected_module}", selected_module_str)
     log_format_file = log_format_file.replace("{version}", SERVER_VERSION)
-    log_format_file = log_format_file.replace("{selected_module}", selected_module_str)
 
     log_level = log_config.get("log_level", "INFO")
     log_dir = log_config.get("log_dir", "tmp")
@@ -81,3 +96,8 @@ def setup_logging():
     )
 
     return logger
+
+
+def create_connection_logger(selected_module_str):
+    """为连接创建独立的日志器，绑定特定的模块字符串"""
+    return logger.bind(selected_module=selected_module_str)

@@ -7,12 +7,15 @@ import base64
 import requests
 from datetime import datetime
 from core.providers.tts.base import TTSProviderBase
-
-import http.client
-import urllib.parse
+from config.logger import setup_logging
 import time
 import uuid
 from urllib import parse
+
+TAG = __name__
+logger = setup_logging()
+
+
 class AccessToken:
     @staticmethod
     def _encode_text(text):

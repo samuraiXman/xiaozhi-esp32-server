@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ProcessFlowView">
+        <attr name="pfv_itemSpacing" format="dimension" />
+        <attr name="pfv_selectedColor" format="color" />
+        <attr name="pfv_unselectedColor" format="color" />
+        <attr name="pfv_arrowDrawable" format="reference" />
+    </declare-styleable>
+</resources> 

@@ -63,7 +63,7 @@
             <div class="table_bottom">
               <div class="ctrl_btn">
                 <el-button size="mini" type="primary" class="select-all-btn" @click="handleSelectAll">
-                  {{ isAllSelected ? '取消全选' : '全选' }}
+                  {{ isCurrentPageAllSelected ? '取消全选' : '全选' }}
                 </el-button>
                 <el-button type="success" size="mini" class="add-device-btn" @click="handleAddDevice">
                   新增
@@ -106,8 +106,12 @@ export default {
   data() {
     return {
       addDeviceDialogVisible: false,
+<<<<<<< HEAD
       selectedDevices: [],
       isAllSelected: false,
+=======
+      manualAddDeviceDialogVisible: false,
+>>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
       searchKeyword: "",
       activeSearchKeyword: "",
       currentAgentId: this.$route.query.agentId || '',
@@ -140,6 +144,11 @@ export default {
     },
     pageCount() {
       return Math.ceil(this.filteredDeviceList.length / this.pageSize);
+    },
+    // 计算当前页是否全选
+    isCurrentPageAllSelected() {
+      return this.paginatedDeviceList.length > 0 && 
+             this.paginatedDeviceList.every(device => device.selected);
     },
     visiblePages() {
       const pages = [];
@@ -186,16 +195,15 @@ export default {
     },
 
     handleSelectAll() {
-      this.isAllSelected = !this.isAllSelected;
+      const shouldSelectAll = !this.isCurrentPageAllSelected;
       this.paginatedDeviceList.forEach(row => {
-        row.selected = this.isAllSelected;
+        row.selected = shouldSelectAll;
       });
-      this.selectedDevices = this.paginatedDeviceList.filter(device => device.selected);
     },
 
     deleteSelected() {
-      this.selectedDevices = this.paginatedDeviceList.filter(device => device.selected);
-      if (this.selectedDevices.length === 0) {
+      const selectedDevices = this.paginatedDeviceList.filter(device => device.selected);
+      if (selectedDevices.length === 0) {
         this.$message.warning({
           message: '请至少选择一条记录',
           showClose: true
@@ -203,12 +211,12 @@ export default {
         return;
       }
 
-      this.$confirm(`确认要解绑选中的 ${this.selectedDevices.length} 台设备吗？`, '警告', {
+      this.$confirm(`确认要解绑选中的 ${selectedDevices.length} 台设备吗？`, '警告', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
       }).then(() => {
-        const deviceIds = this.selectedDevices.map(device => device.device_id);
+        const deviceIds = selectedDevices.map(device => device.device_id);
         this.batchUnbindDevices(deviceIds);
       });
     },
@@ -227,10 +235,25 @@ export default {
       });
 
       Promise.all(promises)
+<<<<<<< HEAD
         .then(() => {
           this.$message.success({
             message: `成功解绑 ${deviceIds.length} 台设备`,
             showClose: true
+=======
+          .then(() => {
+            this.$message.success({
+              message: `成功解绑 ${deviceIds.length} 台设备`,
+              showClose: true
+            });
+            this.fetchBindDevices(this.currentAgentId);
+          })
+          .catch(error => {
+            this.$message.error({
+              message: error || '批量解绑过程中出现错误',
+              showClose: true
+            });
+>>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
           });
           this.fetchBindDevices(this.currentAgentId);
           this.selectedDevices = [];
@@ -304,7 +327,8 @@ export default {
               remark: device.alias,
               isEdit: false,
               otaSwitch: device.autoUpdate === 1,
-              rawBindTime: new Date(device.createDate).getTime()
+              rawBindTime: new Date(device.createDate).getTime(),
+              selected: false
             };
           })
             .sort((a, b) => a.rawBindTime - b.rawBindTime);

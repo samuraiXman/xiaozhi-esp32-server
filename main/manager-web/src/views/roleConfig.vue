@@ -69,7 +69,7 @@
                       <div class="model-select-wrapper">
                         <el-select v-model="form.model[model.key]" filterable placeholder="请选择" class="form-select"
                           @change="handleModelChange(model.type, $event)">
-                          <el-option v-for="(item, optionIndex) in modelOptions[model.type]"
+                          <el-option v-for="(item, optionIndex) in modelOptions[model.type]" v-if="!item.isHidden"
                             :key="`option-${index}-${optionIndex}`" :label="item.label" :value="item.value" />
                         </el-select>
                         <div v-if="showFunctionIcons(model.type)" class="function-icons">
@@ -117,9 +117,14 @@
         </div>
       </div>
     </div>
+<<<<<<< HEAD
 
     <function-dialog v-model="showFunctionDialog" :functions="currentFunctions"
       @update-functions="handleUpdateFunctions" @dialog-closed="handleDialogClosed" />
+=======
+    <function-dialog v-model="showFunctionDialog" :functions="currentFunctions" :all-functions="allFunctions"
+      :agent-id="$route.query.agentId" @update-functions="handleUpdateFunctions" @dialog-closed="handleDialogClosed" />
+>>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
   </div>
 </template>
 
@@ -158,8 +163,9 @@ export default {
         { label: '大语言模型(LLM)', key: 'llmModelId', type: 'LLM' },
         { label: '意图识别(Intent)', key: 'intentModelId', type: 'Intent' },
         { label: '记忆(Memory)', key: 'memModelId', type: 'Memory' },
-        { label: '语音合成(TTS)', key: 'ttsModelId', type: 'TTS' },
+        { label: '语音合成(TTS)', key: 'ttsModelId', type: 'TTS' }
       ],
+      llmModeTypeMap: new Map(),
       modelOptions: {},
       templates: [],
       loadingTemplate: false,
@@ -309,7 +315,40 @@ export default {
               intentModelId: data.data.intentModelId
             }
           };
+<<<<<<< HEAD
           this.currentFunctions = data.data.functions || [];
+=======
+          // 后端只给了最小映射：[{ id, agentId, pluginId }, ...]
+          const savedMappings = data.data.functions || [];
+
+          // 先保证 allFunctions 已经加载（如果没有，则先 fetchAllFunctions）
+          const ensureFuncs = this.allFunctions.length
+            ? Promise.resolve()
+            : this.fetchAllFunctions();
+
+          ensureFuncs.then(() => {
+            // 合并：按照 pluginId（id 字段）把全量元数据信息补齐
+            this.currentFunctions = savedMappings.map(mapping => {
+              const meta = this.allFunctions.find(f => f.id === mapping.pluginId);
+              if (!meta) {
+                // 插件定义没找到，退化处理
+                return { id: mapping.pluginId, name: mapping.pluginId, params: {} };
+              }
+              return {
+                id: mapping.pluginId,
+                name: meta.name,
+                // 后端如果还有 paramInfo 字段就用 mapping.paramInfo，否则用 meta.params 默认值
+                params: mapping.paramInfo || { ...meta.params },
+                fieldsMeta: meta.fieldsMeta  // 保留以便对话框渲染 tooltip
+              };
+            });
+            // 备份原始，以备取消时恢复
+            this.originalFunctions = JSON.parse(JSON.stringify(this.currentFunctions));
+
+            // 确保意图识别选项的可见性正确
+            this.updateIntentOptionsVisibility();
+          });
+>>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
         } else {
           this.$message.error(data.msg || '获取配置失败');
         }
@@ -317,16 +356,41 @@ export default {
     },
     fetchModelOptions() {
       this.models.forEach(model => {
-        Api.model.getModelNames(model.type, '', ({ data }) => {
-          if (data.code === 0) {
-            this.$set(this.modelOptions, model.type, data.data.map(item => ({
-              value: item.id,
-              label: item.modelName
-            })));
-          } else {
-            this.$message.error(data.msg || '获取模型列表失败');
-          }
-        });
+        if (model.type != "LLM") {
+          Api.model.getModelNames(model.type, '', ({ data }) => {
+            if (data.code === 0) {
+              this.$set(this.modelOptions, model.type, data.data.map(item => ({
+                value: item.id,
+                label: item.modelName,
+                isHidden: false
+              })));
+
+              // 如果是意图识别选项，需要根据当前LLM类型更新可见性
+              if (model.type === 'Intent') {
+                this.updateIntentOptionsVisibility();
+              }
+            } else {
+              this.$message.error(data.msg || '获取模型列表失败');
+            }
+          });
+        } else {
+          Api.model.getLlmModelCodeList('', ({ data }) => {
+            if (data.code === 0) {
+              let LLMdata = []
+              data.data.forEach(item => {
+                LLMdata.push({
+                  value: item.id,
+                  label: item.modelName,
+                  isHidden: false
+                })
+                this.llmModeTypeMap.set(item.id, item.type)
+              })
+              this.$set(this.modelOptions, model.type, LLMdata);
+            } else {
+              this.$message.error(data.msg || '获取LLM模型列表失败');
+            }
+          });
+        }
       });
     },
     fetchVoiceOptions(modelId) {
@@ -365,6 +429,10 @@ export default {
       if (type === 'Memory' && value !== 'Memory_nomem' && (this.form.chatHistoryConf === 0 || this.form.chatHistoryConf === null)) {
         this.form.chatHistoryConf = 2;
       }
+      if (type === 'LLM') {
+        // 当LLM类型改变时，更新意图识别选项的可见性
+        this.updateIntentOptionsVisibility();
+      }
     },
     fetchFunctionList() {
       // 使用假数据代替API调用
@@ -387,6 +455,42 @@ export default {
       if (!saved) {
         // 如果未保存，恢复原始功能列表
         this.currentFunctions = JSON.parse(JSON.stringify(this.originalFunctions));
+      }
+    },
+    updateIntentOptionsVisibility() {
+      // 根据当前选择的LLM类型更新意图识别选项的可见性
+      const currentLlmId = this.form.model.llmModelId;
+      if (!currentLlmId || !this.modelOptions['Intent']) return;
+
+      const llmType = this.llmModeTypeMap.get(currentLlmId);
+      if (!llmType) return;
+
+      this.modelOptions['Intent'].forEach(item => {
+        if (item.value === "Intent_function_call") {
+          // 如果llmType是openai或ollama，允许选择function_call
+          // 否则隐藏function_call选项
+          if (llmType === "openai" || llmType === "ollama") {
+            item.isHidden = false;
+          } else {
+            item.isHidden = true;
+          }
+        } else {
+          // 其他意图识别选项始终可见
+          item.isHidden = false;
+        }
+      });
+
+      // 如果当前选择的意图识别是function_call，但LLM类型不支持，则设置为可选的第一项
+      if (this.form.model.intentModelId === "Intent_function_call" &&
+        llmType !== "openai" && llmType !== "ollama") {
+        // 找到第一个可见的选项
+        const firstVisibleOption = this.modelOptions['Intent'].find(item => !item.isHidden);
+        if (firstVisibleOption) {
+          this.form.model.intentModelId = firstVisibleOption.value;
+        } else {
+          // 如果没有可见选项，设置为Intent_nointent
+          this.form.model.intentModelId = 'Intent_nointent';
+        }
       }
     },
     updateChatHistoryConf() {

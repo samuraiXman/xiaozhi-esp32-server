@@ -5,6 +5,11 @@ from core.handle.sendAudioHandle import send_stt_message
 from core.handle.intentHandler import handle_user_intent
 from core.utils.output_counter import check_device_output_limit
 from core.handle.reportHandle import enqueue_asr_report
+from core.handle.abortHandle import handleAbortMessage
+import time
+import asyncio
+import json
+from core.handle.sendAudioHandle import SentenceType
 from core.utils.util import audio_to_data
 
 TAG = __name__
@@ -54,9 +59,34 @@ async def handleAudioMessage(conn, audio):
 
 
 async def startToChat(conn, text):
-    #if conn.need_bind:
-    #    await check_bind_device(conn)
-    #    return
+    # 检查输入是否是JSON格式（包含说话人信息）
+    speaker_name = None
+    actual_text = text
+    
+    try:
+        # 尝试解析JSON格式的输入
+        if text.strip().startswith('{') and text.strip().endswith('}'):
+            data = json.loads(text)
+            if 'speaker' in data and 'content' in data:
+                speaker_name = data['speaker']
+                actual_text = data['content']
+                conn.logger.bind(tag=TAG).info(f"解析到说话人信息: {speaker_name}")
+                
+                # 直接使用JSON格式的文本，不解析
+                actual_text = text
+    except (json.JSONDecodeError, KeyError):
+        # 如果解析失败，继续使用原始文本
+        pass
+    
+    # 保存说话人信息到连接对象
+    if speaker_name:
+        conn.current_speaker = speaker_name
+    else:
+        conn.current_speaker = None
+
+    if conn.need_bind:
+        await check_bind_device(conn)
+        return
 
     # 如果当日的输出字数大于限定的字数
     if conn.max_output_size > 0:
@@ -66,21 +96,17 @@ async def startToChat(conn, text):
             await max_out_size(conn)
             return
 
-    # 首先进行意图分析
-    intent_handled = await handle_user_intent(conn, text)
+    # 首先进行意图分析，使用实际文本内容
+    intent_handled = await handle_user_intent(conn, actual_text)
 
     if intent_handled:
         # 如果意图已被处理，不再进行聊天
         conn.asr_server_receive = True
         return
 
-    # 意图未被处理，继续常规聊天流程
-    await send_stt_message(conn, text)
-    if conn.intent_type == "function_call":
-        # 使用支持function calling的聊天方法
-        conn.executor.submit(conn.chat_with_function_calling, text)
-    else:
-        conn.executor.submit(conn.chat, text)
+    # 意图未被处理，继续常规聊天流程，使用实际文本内容
+    await send_stt_message(conn, actual_text)
+    conn.executor.submit(conn.chat, actual_text)
 
 
 async def no_voice_close_connect(conn):
