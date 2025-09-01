@@ -143,8 +143,7 @@ export default {
                 });
             }).send();
     },
-<<<<<<< HEAD
-=======
+
     // 获取智能体的MCP接入点地址
     getAgentMcpAccessAddress(agentId, callback) {
         RequestService.sendRequest()
@@ -267,5 +266,4 @@ export default {
                 });
             }).send();
     },
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
 }
