@@ -117,14 +117,9 @@
         </div>
       </div>
     </div>
-<<<<<<< HEAD
 
-    <function-dialog v-model="showFunctionDialog" :functions="currentFunctions"
-      @update-functions="handleUpdateFunctions" @dialog-closed="handleDialogClosed" />
-=======
     <function-dialog v-model="showFunctionDialog" :functions="currentFunctions" :all-functions="allFunctions"
       :agent-id="$route.query.agentId" @update-functions="handleUpdateFunctions" @dialog-closed="handleDialogClosed" />
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
   </div>
 </template>
 
@@ -315,9 +310,7 @@ export default {
               intentModelId: data.data.intentModelId
             }
           };
-<<<<<<< HEAD
-          this.currentFunctions = data.data.functions || [];
-=======
+
           // 后端只给了最小映射：[{ id, agentId, pluginId }, ...]
           const savedMappings = data.data.functions || [];
 
@@ -348,7 +341,6 @@ export default {
             // 确保意图识别选项的可见性正确
             this.updateIntentOptionsVisibility();
           });
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
         } else {
           this.$message.error(data.msg || '获取配置失败');
         }

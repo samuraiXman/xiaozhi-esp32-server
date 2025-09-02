@@ -60,8 +60,6 @@
       </div>
     </div>
 
-<<<<<<< HEAD
-=======
     <!-- MCP区域 -->
     <div class="mcp-access-point">
       <div class="mcp-container">
@@ -118,7 +116,6 @@
       </div>
     </div>
 
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
     <div class="drawer-footer">
       <el-button @click="closeDialog">取消</el-button>
       <el-button type="primary" @click="saveSelection">保存配置</el-button>
@@ -466,8 +463,7 @@ export default {
 ::v-deep .el-checkbox__label {
   display: none;
 }
-<<<<<<< HEAD
-=======
+
 
 .mcp-access-point {
   border-top: 1px solid #EBEEF5;
@@ -662,5 +658,4 @@ export default {
     padding: 10px 0;
   }
 }
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
 </style>

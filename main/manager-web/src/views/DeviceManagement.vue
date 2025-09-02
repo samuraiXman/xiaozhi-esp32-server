@@ -106,12 +106,9 @@ export default {
   data() {
     return {
       addDeviceDialogVisible: false,
-<<<<<<< HEAD
       selectedDevices: [],
       isAllSelected: false,
-=======
       manualAddDeviceDialogVisible: false,
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
       searchKeyword: "",
       activeSearchKeyword: "",
       currentAgentId: this.$route.query.agentId || '',
@@ -235,30 +232,21 @@ export default {
       });
 
       Promise.all(promises)
-<<<<<<< HEAD
-        .then(() => {
-          this.$message.success({
-            message: `成功解绑 ${deviceIds.length} 台设备`,
-            showClose: true
-=======
           .then(() => {
             this.$message.success({
               message: `成功解绑 ${deviceIds.length} 台设备`,
               showClose: true
             });
-            this.fetchBindDevices(this.currentAgentId);
+             this.fetchBindDevices(this.currentAgentId);
+             this.selectedDevices = [];
+             this.isAllSelected = false;
           })
           .catch(error => {
             this.$message.error({
               message: error || '批量解绑过程中出现错误',
               showClose: true
             });
->>>>>>> 63dfcde4c8343b31543d837ab8f3fbeb88d90e7b
-          });
-          this.fetchBindDevices(this.currentAgentId);
-          this.selectedDevices = [];
-          this.isAllSelected = false;
-        })
+          })
         .catch(error => {
           this.$message.error({
             message: error || '批量解绑过程中出现错误',
